@@ -70,6 +70,14 @@ install(DIRECTORY include/
   DESTINATION include/
 )
 
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}/launch
+)
+
+install(DIRECTORY param/
+  DESTINATION share/${PROJECT_NAME}/param
+)
+
 # =============================================================
 # Export dependencies and plugin info
 # DO NOT EDIT THESE unless adding new dependencies

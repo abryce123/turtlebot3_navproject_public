@@ -1,6 +1,9 @@
 # HORC LAB Robotics Turtlebot3
 This branch (pc-dev-final) contains the packages required for general Turtlebot3 operation and Nav2 controller plugin development for the remote PC. Most packages in this branch are finished and intended for local development and general Turtlebot3 use.
 
+## Commands:
+Run Custom Controller in Sim: `ros2 launch nav2_custom_controller custom_controller.launch`
+
 ---
 This project contains the following list of `ROS2` packages:
 
