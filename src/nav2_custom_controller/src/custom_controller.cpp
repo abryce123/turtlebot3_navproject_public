@@ -98,25 +98,67 @@ geometry_msgs::msg::TwistStamped CustomController::computeVelocityCommands(
   }
 
   // === [STUDENT SECTION] Implement your controller logic below ===
-  // Example: Simple proportional controller to drive straight toward the goal (replace this!)
-  double dx = goal_pose_.pose.position.x - robot_pose_in_global.pose.position.x;
-  double dy = goal_pose_.pose.position.y - robot_pose_in_global.pose.position.y;
-  double distance_error = std::hypot(dx, dy);
-  double heading_error = std::atan2(dy, dx) - tf2::getYaw(robot_pose_in_global.pose.orientation);
+  
+  //need waypoint positions
 
-  // Normalize angle error to [-pi, pi]
-  heading_error = std::atan2(std::sin(heading_error), std::cos(heading_error));
+  double min_dist = std::numeric_limits<double>::max();
+  size_t desired_index = 0;
 
-  // Example proportional control (must be replaced with real logic!)
-  double linear_vel = std::min(kp_ * distance_error, 0.5);  // Clamp for safety
-  double w = heading_error;  // Angular velocity
+  for (size_t i=0; i < global_plan_.poses.size(); ++i){
+    const auto & pose = global_plan_.poses[i].pose;
+    double distance_error = std::hypot(
+      pose.position.x - robot_pose_in_global.pose.position.x,
+      pose.position.y - robot_pose_in_global.pose.position.y
+    );
+
+    if (distance_error < min_dist){
+      min_dist = distance_error;
+      desired_index = i;
+    }
+  }
+
+  RCLCPP_INFO(logger_, "Minimum Distance: %.3f", min_dist);
+  RCLCPP_INFO(logger_, "Desired Index: %zu", desired_index);
+
+  size_t lookahead_index = std::min(desired_index + 8, global_plan_.poses.size()-1);
+  RCLCPP_INFO(logger_, "New Desired Index: %zu", lookahead_index);
+
+  // find point on path that you want
+  const auto & target_pose = global_plan_.poses[lookahead_index].pose;
+  
+  // now use new target on path for calculations
+  double dx = target_pose.position.x - robot_pose_in_global.pose.position.x;
+  double dy = target_pose.position.y - robot_pose_in_global.pose.position.y;
+  double distance_error = std::hypot(dx,dy);
+  
+  double heading_error = std::atan2(dy,dx) - tf2::getYaw(robot_pose_in_global.pose.orientation);
+  heading_error = std::atan2(std::sin(heading_error), std::cos(heading_error)); // Normalize angle error to [-pi, pi]
+  
+  double dt = 0.1;
+  // linear velocity control
+  double kp_lin = 0.5, ki_lin = 0.1, kd_lin = 0.2;
+  double previous_distance_error = 0.0, integral_distance = 0.0;
+
+  integral_distance += distance_error*dt;
+  double derivative_distance = (distance_error - previous_distance_error);
+  double desired_linear_vel = kp_lin*distance_error + ki_lin*integral_distance + kd_lin*derivative_distance;
+  previous_distance_error = distance_error;
+
+  // angular velocity control
+  double kp_ang = 0.8, ki_ang = 0.1, kd_ang = 0.2;
+  double previous_heading_error = 0.0, integral_heading = 0.0;
+
+  integral_heading += heading_error * dt;
+  double derivative_heading = (heading_error - previous_heading_error);
+  double desired_angular_vel = kp_ang * heading_error + ki_ang * integral_heading + kd_ang * derivative_heading;
+  previous_heading_error = heading_error;
 
   // === [OUTPUT VELOCITY] Send velocity command to robot ===
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header.stamp = clock_->now();
   cmd_vel.header.frame_id = base_frame;
-  cmd_vel.twist.linear.x = linear_vel;
-  cmd_vel.twist.angular.z = w;
+  cmd_vel.twist.linear.x = std::min(desired_linear_vel, 0.5);
+  cmd_vel.twist.angular.z = desired_angular_vel;
   return cmd_vel;
 }
 
