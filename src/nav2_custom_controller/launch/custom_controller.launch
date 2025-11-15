@@ -3,7 +3,7 @@
   <arg name="params_file"
        default="$(find-pkg-share nav2_custom_controller)/param/burger_custom_controller.yaml"/>
   <arg name="map"
-       default="/home/andrew/workspaces/turtlebot3_navproject_public/src/maps/test_lab/test_lab.yaml"/>
+       default="/home/andrew/workspaces/turtlebot3_navproject_public/src/maps/trial_3/trial_3.yaml"/>
   <arg name="headless" default="False" /> <!-- false => show Gazebo GUI -->
 
   <!-- Include the Nav2 tb3 simulation bringup (spawns TB3 + brings up Nav2) -->
