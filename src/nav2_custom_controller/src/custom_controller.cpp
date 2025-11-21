@@ -21,13 +21,47 @@ void CustomController::configure(
 
   // === [STUDENT SECTION] Declare and retrieve controller parameters ===
   // You may add any control-specific parameters here
-  // Example gain parameter:
-  node_->declare_parameter(name + ".kp", 1.0);
-  node_->get_parameter(name + ".kp", kp_);
+
+  // Linear PID gains
+  node_->declare_parameter(plugin_name_ + ".kp_lin", 0.6);
+  node_->declare_parameter(plugin_name_ + ".ki_lin", 0.2);
+  node_->declare_parameter(plugin_name_ + ".kd_lin", 0.5);
+
+  node_->get_parameter(plugin_name_ + ".kp_lin", kp_lin);
+  node_->get_parameter(plugin_name_ + ".ki_lin", ki_lin);
+  node_->get_parameter(plugin_name_ + ".kd_lin", kd_lin);
+
+  // Angular PID gains
+  node_->declare_parameter(plugin_name_ + ".kp_ang", 1.2);
+  node_->declare_parameter(plugin_name_ + ".ki_ang", 0.1);
+  node_->declare_parameter(plugin_name_ + ".kd_ang", 0.5);
+
+  node_->get_parameter(plugin_name_ + ".kp_ang", kp_ang);
+  node_->get_parameter(plugin_name_ + ".ki_ang", ki_ang);
+  node_->get_parameter(plugin_name_ + ".kd_ang", kd_ang);
+
+  // Limits
+  node_->declare_parameter(plugin_name_ + ".max_linear_vel", 0.5);
+  node_->declare_parameter(plugin_name_ + ".max_angular_vel", 1.8);
+  node_->declare_parameter(plugin_name_ + ".max_integral_lin", 1.0);
+  node_->declare_parameter(plugin_name_ + ".max_integral_ang", 1.0);
+
+  node_->get_parameter(plugin_name_ + ".max_linear_vel", max_lin);
+  node_->get_parameter(plugin_name_ + ".max_angular_vel", max_ang);
+
+  // Reset PID state
+  previous_distance_error = 0.0;
+  previous_heading_error = 0.0;
+  integral_distance = 0.0;
+  integral_heading = 0.0;
+  prev_time = steady_clock_.now();
+
+
 }
 
 void CustomController::cleanup() {}
-void CustomController::activate() {}
+void CustomController::activate() {
+}
 void CustomController::deactivate() {}
 
 void CustomController::setPlan(const nav_msgs::msg::Path & path)
@@ -117,13 +151,9 @@ geometry_msgs::msg::TwistStamped CustomController::computeVelocityCommands(
     }
   }
 
-  RCLCPP_INFO(logger_, "Minimum Distance: %.3f", min_dist);
-  RCLCPP_INFO(logger_, "Desired Index: %zu", desired_index);
-
-  size_t lookahead_index = std::min(desired_index + 8, global_plan_.poses.size()-1);
-  RCLCPP_INFO(logger_, "New Desired Index: %zu", lookahead_index);
-
+  
   // find point on path that you want
+  size_t lookahead_index = std::min(desired_index + 8, global_plan_.poses.size()-1);
   const auto & target_pose = global_plan_.poses[lookahead_index].pose;
   
   // now use new target on path for calculations
@@ -134,31 +164,61 @@ geometry_msgs::msg::TwistStamped CustomController::computeVelocityCommands(
   double heading_error = std::atan2(dy,dx) - tf2::getYaw(robot_pose_in_global.pose.orientation);
   heading_error = std::atan2(std::sin(heading_error), std::cos(heading_error)); // Normalize angle error to [-pi, pi]
   
-  double dt = 0.1;
+  // computitng dt
+  auto now = steady_clock_.now();
+  double dt = (now - prev_time).seconds();
+  dt = std::clamp(dt, 1e-3, 0.05);
+  prev_time = now;
+  
   // linear velocity control
-  double kp_lin = 0.5, ki_lin = 0.1, kd_lin = 0.2;
-  double previous_distance_error = 0.0, integral_distance = 0.0;
-
+  
+  // I-term
   integral_distance += distance_error*dt;
+
+  // D-term
   double derivative_distance = (distance_error - previous_distance_error);
+
+  // PID
   double desired_linear_vel = kp_lin*distance_error + ki_lin*integral_distance + kd_lin*derivative_distance;
   previous_distance_error = distance_error;
 
   // angular velocity control
-  double kp_ang = 0.8, ki_ang = 0.1, kd_ang = 0.2;
-  double previous_heading_error = 0.0, integral_heading = 0.0;
 
+  // I-term
   integral_heading += heading_error * dt;
+
+  // D-term
   double derivative_heading = (heading_error - previous_heading_error);
+
+  // PID
   double desired_angular_vel = kp_ang * heading_error + ki_ang * integral_heading + kd_ang * derivative_heading;
   previous_heading_error = heading_error;
+
+  // DEBUGGING: Linear PID terms
+  RCLCPP_INFO(logger_,
+    "Linear PID -> P: %.3f, I: %.3f, D: %.3f, Output: %.3f",
+    kp_lin * distance_error,
+    ki_lin * integral_distance,
+    kd_lin * derivative_distance,
+    desired_linear_vel);
+
+  // DEBUGGING: Angular PID terms
+  RCLCPP_INFO(logger_,
+    "Angular PID -> P: %.3f, I: %.3f, D: %.3f, Output: %.3f",
+    kp_ang * heading_error,
+    ki_ang * integral_heading,
+    kd_ang * derivative_heading,
+    desired_angular_vel);
+
+  RCLCPP_INFO(logger_,"dt is: %.3f",dt);
+
 
   // === [OUTPUT VELOCITY] Send velocity command to robot ===
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header.stamp = clock_->now();
   cmd_vel.header.frame_id = base_frame;
-  cmd_vel.twist.linear.x = std::min(desired_linear_vel, 0.5);
-  cmd_vel.twist.angular.z = desired_angular_vel;
+  cmd_vel.twist.linear.x = std::min(desired_linear_vel, max_lin);
+  cmd_vel.twist.angular.z = std::min(desired_angular_vel, max_ang);
   return cmd_vel;
 }
 

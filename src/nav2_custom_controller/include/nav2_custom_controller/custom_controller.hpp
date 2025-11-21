@@ -74,7 +74,29 @@ protected:
   geometry_msgs::msg::PoseStamped goal_pose_;
 
   // === [STUDENT SECTION] Example parameter (students may add more)
-  double kp_;  // Proportional gain for goal distance
+  
+  // PID gains
+  double kp_lin;
+  double ki_lin;
+  double kd_lin;
+
+  double kp_ang;
+  double ki_ang;
+  double kd_ang;
+
+  // PID state
+  double previous_distance_error;
+  double previous_heading_error;
+  double integral_distance;
+  double integral_heading;
+
+  // Limits
+  double max_lin;
+  double max_ang;
+
+  // Timing
+  rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
+  rclcpp::Time prev_time;
 
   // === [STUDENT SECTION] Add any custom helper functions below (declarations only)
   // Example:

@@ -38,6 +38,7 @@ amcl:
     z_rand: 0.5
     z_short: 0.05
     scan_topic: scan
+    
 
 amcl_map_client:
   ros__parameters:
@@ -112,7 +113,14 @@ controller_server:
       # Add your controller-specific parameters below.
       # These should match the ones declared in your plugin's configure() method.
 
-      kp: 1.0  # Example: proportional gain for linear distance to goal
+      kp_lin: 0.8
+      ki_lin: 0.015
+      kd_lin: 0.35
+      kp_ang: 1.0
+      ki_ang: 0.015
+      kd_ang: 0.45
+      max_linear_vel: 0.5
+      max_angular_vel: 2.5
 
       # Students may add additional parameters as needed
       # For example:
